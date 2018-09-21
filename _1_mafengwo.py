@@ -15,6 +15,9 @@
 1. 国内-省-目的地 可以获取该地区所有城市
 2. 城市-景点 可以获取该城市所有景点
 3. 城市-社区-游记 可以获取该城市所有游记
+
+--
+BloomFilter
 """
 
 import os
@@ -24,12 +27,7 @@ from pybloomfilter import BloomFilter
 
 
 dir_name = 'notes/'
-
 bf = BloomFilter(1024 * 1024 * 16, 0.01)
-
-
-def start():
-    return
 
 
 def find_all_city_pages_url():
@@ -42,28 +40,39 @@ def get_city_number(url):
     return url[29:34]
 
 
+def save_html(file_name, html):
+    with open(file_name, 'wb+') as f:
+        f.write(html.encode())
+        f.close()
+
+
 def download_city_notes(city_number):
     i = 0
     while True:
         i += 1
         url = 'http://www.mafengwo.cn/yj/%s/1-0-%d.html' % (city_number, i)
-        if url in bf:
+        if str.encode(url) in bf:
             continue
-        bf.add(url)
-        req = requests.get(url)
-        city_notes = re.findall('href="/i\d{7}.html', req.text)
 
-        # 当没有找到时退出
-        if len(city_notes) == 0:
-            return
+        if not bf.add(url.encode()):
+            req = requests.get(url)
+            city_notes = re.findall('href="/i/\d{7}.html"', req.text)
 
-        for city_note in city_notes:
-            try:
-                city_url = 'http://www.mafengwo.cn%s' % (city_note[6:])
-                req = requests.get(city_url)
+            # 当没有找到时退出
+            if len(city_notes) == 0:
+                return
 
-
-
+            for city_note in city_notes:
+                try:
+                    city_url = 'http://www.mafengwo.cn%s' % (city_note[6:-1])
+                    if str.encode(city_url) in bf:
+                        continue
+                    print("city_url = ", city_url)
+                    if not bf.add(city_url.encode()):
+                        req = requests.get(city_url)
+                        save_html(dir_name + city_number + '_' + city_note[7:-1].replace('/', '_'), req.text)
+                except Exception as e:
+                    print(e)
 
 
 if __name__ == '__main__':
@@ -72,3 +81,5 @@ if __name__ == '__main__':
     city_page_urls = find_all_city_pages_url()
     for city in city_page_urls:
         city_number = get_city_number(city)
+        download_city_notes(city_number)
+
